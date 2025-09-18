@@ -1,34 +1,25 @@
-import { createRouter, createWebHistory } from '@ionic/vue-router';
-import { RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory } from '@ionic/vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import TabsPage from '../views/TabsPage.vue'
 
+const LoginPage = () => import('../views/LoginPage.vue')
+
 const routes: Array<RouteRecordRaw> = [
-  {
-    path: '/',
-    redirect: '/tabs/tab1'
-  },
+  { path: '/', redirect: '/login' },
+  { path: '/login', component: LoginPage },
   {
     path: '/tabs/',
     component: TabsPage,
+    meta: { requiresAuth: true },
     children: [
-      {
-        path: '',
-        redirect: '/tabs/tab1'
-      },
-      {
-        path: 'tab1',
-        component: () => import('@/views/Tab1Page.vue')
-      },
-      {
-        path: 'tab2',
-        component: () => import('@/views/Tab2Page.vue')
-      },
-      {
-        path: 'tab3',
-        component: () => import('@/views/Tab3Page.vue')
-      }
+      { path: '', redirect: '/tabs/character' },
+      { path: 'character', component: () => import('../views/CharacterPage.vue') },
+      { path: 'plans', component: () => import('../views/PlansPage.vue') },
+      { path: 'plan/:id', component: () => import('../views/PlanDetailPage.vue') },
+      { path: 'settings', component: () => import('../views/SettingsPage.vue') }
     ]
-  }
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]
 
 const router = createRouter({
@@ -37,3 +28,4 @@ const router = createRouter({
 })
 
 export default router
+
