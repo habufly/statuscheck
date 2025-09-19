@@ -17,12 +17,12 @@ export interface Character {
 }
 export interface Plan {
   id: string; characterId: string; name: string;
-  resetRule: 'none' | 'daily' | 'weekly';
+  resetRule: 'none' | 'daily' | 'weekly' | 'monthly';
   sortOrder: number; createdAt: number; updatedAt: number;
 }
 export interface Task {
   id: string; planId: string; name: string; reward: Reward;
-  repeatable: boolean; createdAt: number; updatedAt: number;
+  repeatable: boolean; sortOrder?: number; createdAt: number; updatedAt: number;
 }
 export interface TaskCompletion {
   id: string; taskId: string; characterId: string; planId: string;
@@ -74,6 +74,22 @@ class AppDB extends Dexie {
           }
         })
       }
+    })
+    this.version(3).stores({
+      accounts: 'id, username',
+      characters: 'id, accountId, name',
+      plans: 'id, characterId, sortOrder',
+      tasks: 'id, planId, sortOrder',
+      completions: 'id, taskId, planId, characterId, periodKey'
+    }).upgrade(async tx => {
+      // 為現有任務添加 sortOrder
+      const tasksTable = tx.table('tasks')
+      let counter = 0
+      await tasksTable.toCollection().modify(task => {
+        if (task.sortOrder === undefined) {
+          task.sortOrder = counter++
+        }
+      })
     })
   }
 }

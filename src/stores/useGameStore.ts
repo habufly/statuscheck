@@ -179,7 +179,7 @@ export const useGameStore = defineStore('game', {
         updatedAt: now
       }
 
-      const plan: Plan = {
+      const dailyPlan: Plan = {
         id: nanoid(),
         characterId: char.id,
         name: '每日習慣',
@@ -189,10 +189,31 @@ export const useGameStore = defineStore('game', {
         updatedAt: now
       }
 
+      const weeklyPlan: Plan = {
+        id: nanoid(),
+        characterId: char.id,
+        name: '每週目標',
+        resetRule: 'weekly',
+        sortOrder: 2,
+        createdAt: now,
+        updatedAt: now
+      }
+
+      const monthlyPlan: Plan = {
+        id: nanoid(),
+        characterId: char.id,
+        name: '每月挑戰',
+        resetRule: 'monthly',
+        sortOrder: 3,
+        createdAt: now,
+        updatedAt: now
+      }
+
       const tasks: Task[] = [
+        // 每日任務
         {
           id: nanoid(),
-          planId: plan.id,
+          planId: dailyPlan.id,
           name: '早睡',
           reward: { type: 'attr', key: 'vit', amount: 1 },
           repeatable: false,
@@ -201,7 +222,7 @@ export const useGameStore = defineStore('game', {
         },
         {
           id: nanoid(),
-          planId: plan.id,
+          planId: dailyPlan.id,
           name: '30 分鐘閱讀',
           reward: { type: 'money', amount: 10 },
           repeatable: false,
@@ -210,9 +231,47 @@ export const useGameStore = defineStore('game', {
         },
         {
           id: nanoid(),
-          planId: plan.id,
+          planId: dailyPlan.id,
           name: '打坐 20 分鐘',
           reward: { type: 'token', amount: 1 },
+          repeatable: false,
+          createdAt: now,
+          updatedAt: now
+        },
+        // 每週任務
+        {
+          id: nanoid(),
+          planId: weeklyPlan.id,
+          name: '整理房間',
+          reward: { type: 'attr', key: 'wis', amount: 3 },
+          repeatable: false,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: nanoid(),
+          planId: weeklyPlan.id,
+          name: '運動 3 次',
+          reward: { type: 'attr', key: 'str', amount: 2 },
+          repeatable: false,
+          createdAt: now,
+          updatedAt: now
+        },
+        // 每月任務
+        {
+          id: nanoid(),
+          planId: monthlyPlan.id,
+          name: '學會一項新技能',
+          reward: { type: 'attr', key: 'int', amount: 5 },
+          repeatable: false,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: nanoid(),
+          planId: monthlyPlan.id,
+          name: '完成一個項目',
+          reward: { type: 'money', amount: 100 },
           repeatable: false,
           createdAt: now,
           updatedAt: now
@@ -221,7 +280,9 @@ export const useGameStore = defineStore('game', {
 
       await db.transaction('rw', db.characters, db.plans, db.tasks, async () => {
         await db.characters.add(char)
-        await db.plans.add(plan)
+        await db.plans.add(dailyPlan)
+        await db.plans.add(weeklyPlan)
+        await db.plans.add(monthlyPlan)
         await db.tasks.bulkAdd(tasks)
       })
 
@@ -241,12 +302,37 @@ export const useGameStore = defineStore('game', {
     },
 
     async listTasks(planId: string) {
-      return db.tasks.where('planId').equals(planId).toArray()
+      const tasks = await db.tasks.where('planId').equals(planId).toArray()
+      return tasks.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     },
 
     async isCompletedToday(taskId: string) {
+      const task = await db.tasks.get(taskId)
+      if (!task) return false
+      
+      const plan = await db.plans.get(task.planId)
+      if (!plan) return false
+      
+      let periodKey: string
+      switch (plan.resetRule) {
+        case 'daily':
+          periodKey = todayKey()
+          break
+        case 'weekly':
+          periodKey = `W${getWeekKey(new Date())}`
+          break
+        case 'monthly':
+          periodKey = getMonthKey(new Date())
+          break
+        default:
+          // 對於 'none' 類型，檢查是否曾經完成過
+          return !!(await db.completions
+            .where({ taskId, undone: undefined })
+            .first())
+      }
+      
       return !!(await db.completions
-        .where({ taskId, periodKey: todayKey(), undone: undefined })
+        .where({ taskId, periodKey, undone: undefined })
         .first())
     },
 
@@ -277,7 +363,9 @@ export const useGameStore = defineStore('game', {
             ? todayKey()
             : plan.resetRule === 'weekly'
               ? `W${getWeekKey(new Date())}`
-              : undefined
+              : plan.resetRule === 'monthly'
+                ? getMonthKey(new Date())
+                : undefined
       }
 
       await db.transaction('rw', db.characters, db.completions, async () => {
@@ -325,10 +413,67 @@ export const useGameStore = defineStore('game', {
       
       character.name = trimmedName
       character.updatedAt = Date.now()
-      await db.characters.put(character)
+      await db.characters.put(JSON.parse(JSON.stringify(character)))
       
       // 通知角色資料更新
       this.characterUpdateTimestamp = Date.now()
+    },
+
+    async updatePlanName(planId: string, newName: string) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      const plan = await db.plans.get(planId)
+      if (!plan) throw new Error('PLAN_NOT_FOUND')
+      if (plan.characterId !== this.currentCharId) throw new Error('PLAN_MISMATCH')
+      
+      const trimmedName = newName.trim()
+      if (!trimmedName) throw new Error('NAME_EMPTY')
+      
+      plan.name = trimmedName
+      plan.updatedAt = Date.now()
+      await db.plans.put(plan)
+    },
+
+    async updateTask(taskId: string, updates: { name?: string; reward?: Reward }) {
+      const task = await db.tasks.get(taskId)
+      if (!task) throw new Error('TASK_NOT_FOUND')
+      
+      const plan = await db.plans.get(task.planId)
+      if (!plan || plan.characterId !== this.currentCharId) throw new Error('PLAN_MISMATCH')
+      
+      if (updates.name !== undefined) {
+        const trimmedName = updates.name.trim()
+        if (!trimmedName) throw new Error('NAME_EMPTY')
+        task.name = trimmedName
+      }
+      
+      if (updates.reward !== undefined) {
+        task.reward = updates.reward
+      }
+      
+      task.updatedAt = Date.now()
+      await db.tasks.put(task)
+    },
+
+    async updateTaskOrder(planId: string, taskIds: string[]) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      const plan = await db.plans.get(planId)
+      if (!plan || plan.characterId !== this.currentCharId) throw new Error('PLAN_MISMATCH')
+      
+      const tasks = await db.tasks.where('planId').equals(planId).toArray()
+      const updates: Task[] = []
+      
+      taskIds.forEach((taskId, index) => {
+        const task = tasks.find(t => t.id === taskId)
+        if (task) {
+          task.sortOrder = index
+          task.updatedAt = Date.now()
+          updates.push(task)
+        }
+      })
+      
+      if (updates.length > 0) {
+        await db.tasks.bulkPut(updates)
+      }
     }
   }
 })
@@ -338,5 +483,11 @@ function getWeekKey(d: Date) {
   const first = new Date(Date.UTC(year, 0, 1))
   const week = Math.ceil((((d.getTime() - first.getTime()) / 86400000) + first.getUTCDay() + 1) / 7)
   return `${year}-W${week}`
+}
+
+function getMonthKey(d: Date) {
+  const year = d.getUTCFullYear()
+  const month = d.getUTCMonth() + 1
+  return `${year}-M${month.toString().padStart(2, '0')}`
 }
 
