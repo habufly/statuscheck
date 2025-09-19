@@ -50,7 +50,6 @@
               </div>
             </ion-label>
             <ion-badge slot="end">{{ rewardText(task.reward) }}</ion-badge>
-            <ion-button size="small" fill="clear" @click="undo(task.id)">撤銷</ion-button>
           </ion-item>
         </div>
         <div class="ion-padding">
@@ -360,27 +359,7 @@ async function toggle(task: Task, checked: boolean) {
   }
 }
 
-async function undo(taskId: string) {
-  if (!doneMap.value[taskId]) return
-  
-  try {
-    await store.undoTask(taskId)
-    doneMap.value[taskId] = false
-    
-    // 立即保存狀態到緩存
-    saveStateToCache(doneMap.value)
-    
-  } catch (error) {
-    console.error('撤銷任務失敗:', error)
-    // 重新檢查狀態
-    const task = tasks.value.find(t => t.id === taskId)
-    if (task) {
-      doneMap.value[taskId] = await store.isCompletedToday(taskId)
-      // 保存回復的狀態
-      saveStateToCache(doneMap.value)
-    }
-  }
-}
+
 
 async function addTask() {
   if (!plan.value) return
@@ -454,6 +433,14 @@ async function saveTask() {
 }
 
 async function deleteTask(taskId: string) {
+  // 獲取任務名稱用於確認對話框
+  const task = tasks.value.find(t => t.id === taskId)
+  const taskName = task ? task.name : '該任務'
+  
+  if (!confirm(`確定要刪除任務「${taskName}」嗎？`)) {
+    return
+  }
+  
   try {
     await db.transaction('rw', db.tasks, db.completions, async () => {
       await db.tasks.delete(taskId)

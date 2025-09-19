@@ -186,6 +186,14 @@ async function addPlan() {
 }
 
 async function removePlan(id: string) {
+  // 獲取計劃名稱用於確認對話框
+  const plan = plans.value.find(p => p.id === id)
+  const planName = plan ? plan.name : '該計劃'
+  
+  if (!confirm(`確定要刪除「${planName}」嗎？這將同時刪除所有相關任務。`)) {
+    return
+  }
+  
   try {
     // 同時刪除計畫下的所有任務
     const tasks = await db.tasks.where('planId').equals(id).toArray()
