@@ -88,12 +88,14 @@
 
           <ion-item v-if="editingRewardType === 'attr'">
             <ion-label position="stacked">屬性類型</ion-label>
-            <ion-select v-model="editingRewardKey" placeholder="選擇屬性">
-              <ion-select-option value="str">力量</ion-select-option>
-              <ion-select-option value="int">智力</ion-select-option>
-              <ion-select-option value="dex">敏捷</ion-select-option>
-              <ion-select-option value="vit">體力</ion-select-option>
-              <ion-select-option value="wis">智慧</ion-select-option>
+            <ion-select v-model="editingRewardAttributeId" placeholder="選擇屬性">
+              <ion-select-option 
+                v-for="attr in attributeDefinitions" 
+                :key="attr.id" 
+                :value="attr.id"
+              >
+                {{ attr.name }}
+              </ion-select-option>
             </ion-select>
           </ion-item>
 
@@ -138,7 +140,7 @@ import {
   IonIcon,
   IonButtons
 } from '@ionic/vue'
-import { db, type Plan, type Task, type Reward, type AttributeKey } from '@/db'
+import { db, type Plan, type Task, type Reward, type AttributeDefinition } from '@/db'
 import { nanoid } from 'nanoid'
 import { useGameStore } from '@/stores/useGameStore'
 import { createOutline, reorderThreeOutline, trashOutline } from 'ionicons/icons'
@@ -158,7 +160,8 @@ const editingTask = ref<Task | null>(null)
 const editingTaskName = ref('')
 const editingRewardType = ref<'money' | 'token' | 'attr'>('money')
 const editingRewardAmount = ref(5)
-const editingRewardKey = ref<AttributeKey>('str')
+const editingRewardAttributeId = ref('')
+const attributeDefinitions = ref<AttributeDefinition[]>([])
 const taskListElement = ref<HTMLElement | null>(null)
 let sortableInstance: Sortable | null = null
 
@@ -218,14 +221,18 @@ const editingReward = computed<Reward>(() => {
   } else if (editingRewardType.value === 'token') {
     return { type: 'token', amount: editingRewardAmount.value }
   } else {
-    return { type: 'attr', key: editingRewardKey.value, amount: editingRewardAmount.value }
+    return { type: 'attr', attributeId: editingRewardAttributeId.value, amount: editingRewardAmount.value }
   }
 })
 
 function rewardText(reward: Reward) {
   if (reward.type === 'money') return `+$${reward.amount}`
   if (reward.type === 'token') return `+代幣 ${reward.amount}`
-  return `+${reward.key.toUpperCase()} ${reward.amount}`
+  
+  // 尋找屬性定義名稱
+  const attr = attributeDefinitions.value.find(a => a.id === reward.attributeId)
+  const attrName = attr ? attr.name : '未知屬性'
+  return `+${attrName} ${reward.amount}`
 }
 
 async function load() {
@@ -233,8 +240,12 @@ async function load() {
     plan.value = null
     tasks.value = []
     doneMap.value = {}
+    attributeDefinitions.value = []
     return
   }
+
+  // 載入屬性定義
+  attributeDefinitions.value = await store.listAttributeDefinitions()
 
   const fetched = await db.plans.get(planId.value)
   if (!fetched || fetched.characterId !== store.currentCharId) {
@@ -409,7 +420,7 @@ function editTask(task: Task) {
   } else {
     editingRewardType.value = 'attr'
     editingRewardAmount.value = task.reward.amount
-    editingRewardKey.value = task.reward.key
+    editingRewardAttributeId.value = task.reward.attributeId
   }
   
   editModalOpen.value = true
@@ -421,7 +432,8 @@ function closeEditModal() {
   editingTaskName.value = ''
   editingRewardType.value = 'money'
   editingRewardAmount.value = 5
-  editingRewardKey.value = 'str'
+  // 設定預設屬性 ID（如果有的話）
+  editingRewardAttributeId.value = attributeDefinitions.value.length > 0 ? attributeDefinitions.value[0].id : ''
 }
 
 async function saveTask() {

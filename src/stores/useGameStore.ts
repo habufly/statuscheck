@@ -7,7 +7,8 @@ import {
   type Plan,
   type Reward,
   type Task,
-  type TaskCompletion
+  type TaskCompletion,
+  type AttributeDefinition
 } from '@/db'
 import { nanoid } from 'nanoid'
 
@@ -16,7 +17,7 @@ function applyRewardToChar(character: Character, reward: Reward, reverse = false
   if (reward.type === 'money') character.money += sign * reward.amount
   if (reward.type === 'token') character.token += sign * reward.amount
   if (reward.type === 'attr') {
-    character.attributes[reward.key] = (character.attributes[reward.key] ?? 0) + sign * reward.amount
+    character.attributes[reward.attributeId] = (character.attributes[reward.attributeId] ?? 0) + sign * reward.amount
   }
 }
 
@@ -174,9 +175,63 @@ export const useGameStore = defineStore('game', {
         level: 1,
         money: 0,
         token: 0,
-        attributes: { str: 1, int: 1, dex: 1, vit: 1, wis: 1 },
+        attributes: {}, // 初始為空，下面會填入
         createdAt: now,
         updatedAt: now
+      }
+
+      // 創建預設屬性定義
+      const attributeDefinitions: AttributeDefinition[] = [
+        {
+          id: `${char.id}_attr_str`,
+          name: '力量',
+          characterId: char.id,
+          sortOrder: 0,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: `${char.id}_attr_int`,
+          name: '智力',
+          characterId: char.id,
+          sortOrder: 1,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: `${char.id}_attr_dex`,
+          name: '敏捷',
+          characterId: char.id,
+          sortOrder: 2,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: `${char.id}_attr_vit`,
+          name: '體力',
+          characterId: char.id,
+          sortOrder: 3,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: `${char.id}_attr_wis`,
+          name: '智慧',
+          characterId: char.id,
+          sortOrder: 4,
+          isDefault: true,
+          createdAt: now,
+          updatedAt: now
+        }
+      ]
+
+      // 初始化角色屬性值
+      for (const attr of attributeDefinitions) {
+        char.attributes[attr.id] = 1
       }
 
       const dailyPlan: Plan = {
@@ -215,7 +270,7 @@ export const useGameStore = defineStore('game', {
           id: nanoid(),
           planId: dailyPlan.id,
           name: '早睡',
-          reward: { type: 'attr', key: 'vit', amount: 1 },
+          reward: { type: 'attr', attributeId: `${char.id}_attr_vit`, amount: 1 },
           repeatable: false,
           createdAt: now,
           updatedAt: now
@@ -243,7 +298,7 @@ export const useGameStore = defineStore('game', {
           id: nanoid(),
           planId: weeklyPlan.id,
           name: '整理房間',
-          reward: { type: 'attr', key: 'wis', amount: 3 },
+          reward: { type: 'attr', attributeId: `${char.id}_attr_wis`, amount: 3 },
           repeatable: false,
           createdAt: now,
           updatedAt: now
@@ -252,7 +307,7 @@ export const useGameStore = defineStore('game', {
           id: nanoid(),
           planId: weeklyPlan.id,
           name: '運動 3 次',
-          reward: { type: 'attr', key: 'str', amount: 2 },
+          reward: { type: 'attr', attributeId: `${char.id}_attr_str`, amount: 2 },
           repeatable: false,
           createdAt: now,
           updatedAt: now
@@ -262,7 +317,7 @@ export const useGameStore = defineStore('game', {
           id: nanoid(),
           planId: monthlyPlan.id,
           name: '學會一項新技能',
-          reward: { type: 'attr', key: 'int', amount: 5 },
+          reward: { type: 'attr', attributeId: `${char.id}_attr_int`, amount: 5 },
           repeatable: false,
           createdAt: now,
           updatedAt: now
@@ -278,12 +333,13 @@ export const useGameStore = defineStore('game', {
         }
       ]
 
-      await db.transaction('rw', db.characters, db.plans, db.tasks, async () => {
+      await db.transaction('rw', db.characters, db.plans, db.tasks, db.attributeDefinitions, async () => {
         await db.characters.add(char)
         await db.plans.add(dailyPlan)
         await db.plans.add(weeklyPlan)
         await db.plans.add(monthlyPlan)
         await db.tasks.bulkAdd(tasks)
+        await db.attributeDefinitions.bulkAdd(attributeDefinitions)
       })
 
       this.setCurrentChar(char.id)
@@ -473,6 +529,133 @@ export const useGameStore = defineStore('game', {
       
       if (updates.length > 0) {
         await db.tasks.bulkPut(updates)
+      }
+    },
+
+    // 屬性定義相關方法
+    async listAttributeDefinitions(characterId?: string) {
+      const charId = characterId || this.currentCharId
+      if (!charId) return []
+      return db.attributeDefinitions
+        .where('characterId')
+        .equals(charId)
+        .sortBy('sortOrder')
+    },
+
+    async addAttributeDefinition(name: string) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      
+      const trimmedName = name.trim()
+      if (!trimmedName) throw new Error('NAME_EMPTY')
+      
+      const now = Date.now()
+      const existingAttrs = await this.listAttributeDefinitions()
+      const maxSortOrder = Math.max(...existingAttrs.map(a => a.sortOrder), -1)
+      
+      const attrDef: AttributeDefinition = {
+        id: `${this.currentCharId}_attr_${nanoid()}`,
+        name: trimmedName,
+        characterId: this.currentCharId,
+        sortOrder: maxSortOrder + 1,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now
+      }
+      
+      await db.transaction('rw', db.attributeDefinitions, db.characters, async () => {
+        await db.attributeDefinitions.add(attrDef)
+        
+        // 為角色初始化這個屬性值為 0
+        const character = await db.characters.get(this.currentCharId!)
+        if (character) {
+          character.attributes[attrDef.id] = 0
+          character.updatedAt = now
+          await db.characters.put(character)
+        }
+      })
+      
+      this.characterUpdateTimestamp = now
+      return attrDef
+    },
+
+    async updateAttributeDefinition(attrId: string, updates: { name?: string; sortOrder?: number }) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      
+      const attrDef = await db.attributeDefinitions.get(attrId)
+      if (!attrDef || attrDef.characterId !== this.currentCharId) {
+        throw new Error('ATTRIBUTE_NOT_FOUND')
+      }
+      
+      if (updates.name !== undefined) {
+        const trimmedName = updates.name.trim()
+        if (!trimmedName) throw new Error('NAME_EMPTY')
+        attrDef.name = trimmedName
+      }
+      
+      if (updates.sortOrder !== undefined) {
+        attrDef.sortOrder = updates.sortOrder
+      }
+      
+      attrDef.updatedAt = Date.now()
+      await db.attributeDefinitions.put(attrDef)
+      
+      this.characterUpdateTimestamp = Date.now()
+    },
+
+    async deleteAttributeDefinition(attrId: string) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      
+      const attrDef = await db.attributeDefinitions.get(attrId)
+      if (!attrDef || attrDef.characterId !== this.currentCharId) {
+        throw new Error('ATTRIBUTE_NOT_FOUND')
+      }
+      
+      // 檢查是否有任務使用這個屬性
+      const tasksUsingAttr = await db.tasks
+        .filter(task => task.reward.type === 'attr' && task.reward.attributeId === attrId)
+        .count()
+      
+      if (tasksUsingAttr > 0) {
+        throw new Error('ATTRIBUTE_IN_USE')
+      }
+      
+      const now = Date.now()
+      
+      await db.transaction('rw', db.attributeDefinitions, db.characters, async () => {
+        await db.attributeDefinitions.delete(attrId)
+        
+        // 從角色中移除這個屬性值
+        const character = await db.characters.get(this.currentCharId!)
+        if (character && character.attributes[attrId] !== undefined) {
+          delete character.attributes[attrId]
+          character.updatedAt = now
+          await db.characters.put(character)
+        }
+      })
+      
+      this.characterUpdateTimestamp = now
+    },
+
+    async updateAttributeDefinitionOrder(characterId: string, attrIds: string[]) {
+      if (!this.currentCharId || this.currentCharId !== characterId) {
+        throw new Error('CHARACTER_MISMATCH')
+      }
+      
+      const attrs = await this.listAttributeDefinitions()
+      const updates: AttributeDefinition[] = []
+      
+      attrIds.forEach((attrId, index) => {
+        const attr = attrs.find(a => a.id === attrId)
+        if (attr) {
+          attr.sortOrder = index
+          attr.updatedAt = Date.now()
+          updates.push(attr)
+        }
+      })
+      
+      if (updates.length > 0) {
+        await db.attributeDefinitions.bulkPut(updates)
+        this.characterUpdateTimestamp = Date.now()
       }
     }
   }

@@ -22,12 +22,12 @@ StatusCheck 是一個基於 RPG 遊戲化機制的習慣管理應用程式，使
   - 等級 (level)
   - 金錢 (money)
   - 特殊代幣 (token)
-- [x] **屬性系統**
-  - STR (力量)
-  - INT (智力) 
-  - DEX (敏捷)
-  - VIT (體力)
-  - WIS (智慧)
+- [x] **屬性系統 (重構完成)**
+  - ✨ **自定義屬性支援** - 可動態新增屬性
+  - ✨ **屬性名稱編輯** - 可修改屬性顯示名稱，不影響數值
+  - ✨ **屬性排序功能** - 支援拖拽調整屬性順序
+  - 📊 **預設屬性**：力量、智力、敏捷、體力、智慧
+  - 🔧 **資料遷移**：自動從固定屬性轉換為自定義屬性系統
 - [x] **角色管理**
   - 載入範例資料功能
   - 角色資訊展示
@@ -54,14 +54,17 @@ StatusCheck 是一個基於 RPG 遊戲化機制的習慣管理應用程式，使
   - 第一欄：checkbox (完成狀態)
   - 第二欄：任務名稱
   - 第三欄：獎勵顯示
-- [x] **獎勵機制**
-  - 屬性獎勵 (STR/INT/DEX/VIT/WIS +N)
-  - 金錢獎勵 (+$N)
-  - 代幣獎勵 (+代幣 N)
+- [x] **獎勵機制 (已升級)**
+  - ✨ **動態屬性獎勵** - 自動載入當前角色的所有屬性
+  - 💰 **金錢獎勵** (+$N)
+  - 🪙 **代幣獎勵** (+代幣 N)
+  - 🏷️ **智能顯示** - 獎勵顯示實際屬性名稱而非代碼
 - [x] **任務操作**
   - 完成任務獲得獎勵
   - 撤銷功能
   - 動態新增任務
+  - ✨ **拖拽排序** - 支援任務順序調整
+  - ✨ **任務編輯** - 可修改任務名稱和獎勵
 
 ### 4. 用戶認證系統 (Authentication)
 - [x] **登入/註冊**
@@ -73,7 +76,90 @@ StatusCheck 是一個基於 RPG 遊戲化機制的習慣管理應用程式，使
   - 在設定頁面切換帳號
   - 登出功能
 
+## 🎆 v2.0 自定義屬性系統 (2025-09-19)
+
+### 🚀 **重大功能更新**
+
+#### ✨ **自定義屬性系統**
+- **功能特色**：
+  - 🏷️ **屬性可自定義新增** - 無限制添加新屬性
+  - ✏️ **屬性名稱可編輯** - 不影響已積累數值
+  - 🔄 **拖拽排序** - 灣流的屬性順序調整
+  - 🛡️ **安全刪除** - 檢查使用狀態防止誤刪
+
+- **技術亮點**：
+  - 🔄 **無縫資料遷移** - 自動從固定屬性轉換為動態系統
+  - 💾 **資料庫 v4** - 新增 attributeDefinitions 表
+  - 🔗 **ID 系統** - 使用 characterId_attr_xxx 格式確保唯一性
+  - 🎨 **UI/UX 最佳化** - Ionic 模態框 + Sortable.js 整合
+
+#### 🏠 **人物頁面增強**
+- **屬性管理介面**：
+  - 📊 **動態屬性顯示** - 自動載入當前角色屬性
+  - ⚙️ **管理按鈕** - 一鍵進入屬性管理模式
+  - 🎨 **直覺操作** - 清晰的編輯/刪除/拖拽手柄
+
+- **CRUD 功能**：
+  - ➕ **新增屬性** - 簡潔的輸入介面
+  - ✏️ **編輯名稱** - 點擊編輯按鈕修改
+  - 🗑️ **安全刪除** - 檢查使用狀態加確認
+  - 🔄 **拖拽排序** - 實時保存新順序
+
+#### 🎣 **任務編輯器升級**
+- **動態屬性選擇**：
+  - 🔄 **自動載入** - 選擇器顯示當前角色的所有屬性
+  - 🏷️ **名稱顯示** - 顯示實際屬性名稱而非代碼
+  - 🎯 **智能預設** - 自動選擇第一個可用屬性
+
+### 🛠️ **技術架構改進**
+
+#### **資料模型重構**：
+```typescript
+// 新增屬性定義介面
+interface AttributeDefinition {
+  id: string           // 唯一 ID，永不改變
+  name: string         // 顯示名稱，可編輯
+  characterId: string  // 所屬角色
+  sortOrder: number    // 排序順序
+  isDefault: boolean   // 是否為預設屬性
+  createdAt: number
+  updatedAt: number
+}
+
+// 更新後的獎勵類型
+type Reward = 
+  | { type: 'money'; amount: number }
+  | { type: 'token'; amount: number }
+  | { type: 'attr'; attributeId: string; amount: number } // 使用 attributeId
+```
+
+#### **Store 方法增強**：
+- `listAttributeDefinitions()` - 列出屬性定義
+- `addAttributeDefinition()` - 新增屬性
+- `updateAttributeDefinition()` - 更新屬性名稱
+- `deleteAttributeDefinition()` - 安全刪除屬性
+- `updateAttributeDefinitionOrder()` - 更新排序
+
+#### **UI 組件最佳化**：
+- **Sortable.js 整合** - 流暢的拖拽體驗
+- **Ionic 模態框生命週期** - 使用 `@didPresent` 確保 DOM 渲染
+- **Vue 3 Composition API** - 響應式狀態管理
+- **TypeScript 類型安全** - 完整的型別定義和檢查
+
 ## 資料模型
+
+### AttributeDefinition (屬性定義) ✨ **v2.0 新增**
+```typescript
+interface AttributeDefinition {
+  id: string           // 唯一 ID，永不改變
+  name: string         // 顯示名稱，可編輯
+  characterId: string  // 所屬角色
+  sortOrder: number    // 排序順序
+  isDefault: boolean   // 是否為預設屬性
+  createdAt: number
+  updatedAt: number
+}
+```
 
 ### Account (帳號)
 ```typescript
@@ -86,7 +172,7 @@ interface Account {
 }
 ```
 
-### Character (角色)
+### Character (角色) 🔄 **v2.0 更新**
 ```typescript
 interface Character {
   id: string
@@ -95,7 +181,7 @@ interface Character {
   level: number
   money: number
   token: number
-  attributes: Record<AttributeKey, number>
+  attributes: Record<string, number> // ✨ 改為動態 attributeId 對應
   createdAt: number
   updatedAt: number
 }
@@ -127,12 +213,12 @@ interface Task {
 }
 ```
 
-### Reward (獎勵)
+### Reward (獎勵) 🔄 **v2.0 更新**
 ```typescript
 type Reward =
   | { type: 'money'; amount: number }
   | { type: 'token'; amount: number }
-  | { type: 'attr'; key: AttributeKey; amount: number }
+  | { type: 'attr'; attributeId: string; amount: number } // ✨ 使用 attributeId 取代 key
 ```
 
 ## 頁面結構
@@ -193,28 +279,100 @@ type Reward =
 - [x] 狀態管理 (Pinia Store)
 - [x] 錯誤處理機制
 
-### 🔧 技術修復
+### 🎯 開發進度
+
+#### ✅ **v2.0 自定義屬性系統** (2025-09-19)
+- [x] **資料層重構**
+  - [x] 新增 AttributeDefinition 資料模型
+  - [x] 資料庫版本升級到 v4
+  - [x] 完整的 v3→v4 自動遷移邏輯
+  - [x] Store 屬性管理方法完整實現
+
+- [x] **UI 層實現**
+  - [x] CharacterPage 屬性管理重構
+  - [x] 屬性 CRUD 完整介面
+  - [x] Sortable.js 拖拽排序整合
+  - [x] PlanDetailPage 動態屬性選擇器
+  - [x] Ionic 模態框生命週期優化
+
+- [x] **功能驗證**
+  - [x] 屬性新增/編輯/刪除
+  - [x] 拖拽排序即時保存
+  - [x] 任務編輯器動態屬性載入
+  - [x] 安全刪除檢查機制
+
+#### ✅ **v1.x 基礎功能** (已完成)
+- [x] 基本專案架構設置
+- [x] 路由配置和認證守衛
+- [x] 資料庫設計和遷移
+- [x] 用戶認證系統
+- [x] 人物系統
+- [x] 計劃管理系統
+- [x] 任務系統和獎勵機制
+- [x] 所有核心 UI 頁面
+- [x] 狀態管理 (Pinia Store)
+- [x] 錯誤處理機制
+
+#### 🔧 **技術修復** (已完成)
 - [x] 修復 TabsPage 圖示導入問題
 - [x] 新增缺失的 nanoid 依賴
 - [x] 修復 LoginPage segment 綁定
 - [x] 清理測試文件錯誤引用
 - [x] 移除調試代碼
-
-### 🎯 待優化項目
-- [x] **人物系統優化** (已完成)
+- [x] **人物系統優化**
   - [x] 新增修改姓名的彈窗功能
   - [x] 計劃頁面打勾後同步更新人物介面屬性
-- [x] **計劃介面優化** (已完成)
+- [x] **計劃介面優化**
   - [x] 計劃介面分為每日/每週/每月三個子區塊 (tab)
   - [x] 每個 tab 中可以獨立新增修改刪除計劃
   - [x] 每個計劃需要有獨立的 id 並記錄勾選狀態
   - [x] 避免重新回來計劃介面時打勾狀態重置
-- [ ] **編輯功能增強** (進行中)
-  - [ ] 計劃名稱可編輯
-  - [ ] 任務名稱/獎勵可編輯
-  - [ ] 順序可拖曳移動
-- [ ] 任務編輯功能
-- [ ] 計劃編輯功能
+- [x] **編輯功能增強**
+  - [x] 計劃名稱可編輯
+  - [x] 任務名稱/獎勵可編輯
+  - [x] 順序可拖曳移動
+
+### 🚀 **未來規劃**
+
+#### 🎯 **v3.0 進階功能**
+- [ ] **屬性系統擴展**
+  - [ ] 屬性分組管理
+  - [ ] 屬性類型定義 (百分比、等級制等)
+  - [ ] 屬性間的關聯和公式計算
+  - [ ] 屬性成長曲線和里程碑
+
+- [ ] **任務系統增強**
+  - [ ] 任務模板系統
+  - [ ] 條件式任務 (前置任務完成)
+  - [ ] 週期性任務自動生成
+  - [ ] 任務難度和動態獎勵
+
+#### 🎨 **v3.1 使用者體驗**
+- [ ] **視覺化增強**
+  - [ ] 屬性成長圖表
+  - [ ] 成就系統和徽章
+  - [ ] 主題和個性化設定
+  - [ ] 動畫和過渡效果
+
+- [ ] **社交功能**
+  - [ ] 好友系統
+  - [ ] 排行榜
+  - [ ] 分享成就
+  - [ ] 團隊挑戰
+
+#### 🔧 **v3.2 技術優化**
+- [ ] **效能優化**
+  - [ ] 虛擬列表大量資料處理
+  - [ ] 離線支援和同步
+  - [ ] PWA 功能
+  - [ ] 資料備份和還原
+
+- [ ] **開發工具**
+  - [ ] 單元測試覆蓋率提升
+  - [ ] E2E 測試自動化
+  - [ ] CI/CD 流程優化
+  - [ ] 效能監控和分析
+  - [x] 順序可拖曳移動
 - [ ] 更豐富的獎勵類型
 - [ ] 角色升級機制
 - [ ] 統計和成就系統
