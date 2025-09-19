@@ -26,7 +26,8 @@ export const useGameStore = defineStore('game', {
       (typeof window !== 'undefined' ? localStorage.getItem('currentAccountId') : '') || '',
     currentCharId:
       (typeof window !== 'undefined' ? localStorage.getItem('currentCharId') : '') || '',
-    initialized: false
+    initialized: false,
+    characterUpdateTimestamp: 0 // 用於通知角色資料更新
   }),
 
   getters: {
@@ -282,10 +283,12 @@ export const useGameStore = defineStore('game', {
       await db.transaction('rw', db.characters, db.completions, async () => {
         applyRewardToChar(character, task.reward, false)
         character.updatedAt = Date.now()
-        await db.characters.put({ ...character })
-        await db.completions.add({ ...completion })
-        console.log(character)
+        await db.characters.put(JSON.parse(JSON.stringify(character)))
+        await db.completions.add(JSON.parse(JSON.stringify(completion)))
       })
+      
+      // 通知角色資料更新
+      this.characterUpdateTimestamp = Date.now()
     },
 
     async undoTask(taskId: string) {
@@ -303,10 +306,29 @@ export const useGameStore = defineStore('game', {
       await db.transaction('rw', db.characters, db.completions, async () => {
         applyRewardToChar(character, completion.valueApplied, true)
         character.updatedAt = Date.now()
-        await db.characters.put({ ...character })
+        await db.characters.put(JSON.parse(JSON.stringify(character)))
         completion.undone = true
-        await db.completions.put({ ...completion })
+        await db.completions.put(JSON.parse(JSON.stringify(completion)))
       })
+      
+      // 通知角色資料更新
+      this.characterUpdateTimestamp = Date.now()
+    },
+
+    async updateCharacterName(newName: string) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      const character = await db.characters.get(this.currentCharId)
+      if (!character || character.accountId !== this.currentAccountId) throw new Error('CHAR_NOT_FOUND')
+      
+      const trimmedName = newName.trim()
+      if (!trimmedName) throw new Error('NAME_EMPTY')
+      
+      character.name = trimmedName
+      character.updatedAt = Date.now()
+      await db.characters.put(character)
+      
+      // 通知角色資料更新
+      this.characterUpdateTimestamp = Date.now()
     }
   }
 })

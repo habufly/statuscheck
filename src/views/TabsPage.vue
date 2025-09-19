@@ -4,15 +4,15 @@
       <ion-router-outlet />
       <ion-tab-bar slot="bottom">
         <ion-tab-button tab="character" href="/tabs/character">
-          <ion-icon name="person-circle" />
+          <ion-icon :icon="personCircle" />
           <ion-label>人物</ion-label>
         </ion-tab-button>
         <ion-tab-button tab="plans" href="/tabs/plans">
-          <ion-icon name="list" />
+          <ion-icon :icon="list" />
           <ion-label>計畫</ion-label>
         </ion-tab-button>
         <ion-tab-button tab="settings" href="/tabs/settings">
-          <ion-icon name="settings" />
+          <ion-icon :icon="settings" />
           <ion-label>設定</ion-label>
         </ion-tab-button>
       </ion-tab-bar>
@@ -22,5 +22,5 @@
 
 <script setup lang="ts">
 import { IonTabBar, IonTabButton, IonTabs, IonLabel, IonIcon, IonPage, IonRouterOutlet } from '@ionic/vue';
-import { ellipse, square, triangle } from 'ionicons/icons';
+import { personCircle, list, settings } from 'ionicons/icons';
 </script>

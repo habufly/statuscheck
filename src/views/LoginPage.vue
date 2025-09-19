@@ -8,7 +8,7 @@
 
     <ion-content class="ion-padding">
       <div class="ion-text-center ion-margin-bottom">
-        <ion-segment value="mode" @ionChange="onModeChange($event.detail.value)">
+        <ion-segment :value="mode" @ionChange="onModeChange($event.detail.value)">
           <ion-segment-button value="login">
             <ion-label>登入</ion-label>
           </ion-segment-button>
