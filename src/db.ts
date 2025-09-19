@@ -33,6 +33,7 @@ export interface Character {
 export interface Plan {
   id: string; characterId: string; name: string;
   resetRule: 'none' | 'daily' | 'weekly' | 'monthly';
+  imageUrl?: string; // 計劃圖片 URL
   sortOrder: number; createdAt: number; updatedAt: number;
 }
 export interface Task {
@@ -117,6 +118,17 @@ class AppDB extends Dexie {
       attributeDefinitions: 'id, characterId, sortOrder'
     }).upgrade(async tx => {
       await this.migrateToCustomAttributes(tx)
+    })
+    this.version(5).stores({
+      accounts: 'id, username',
+      characters: 'id, accountId, name',
+      plans: 'id, characterId, sortOrder',
+      tasks: 'id, planId, sortOrder',
+      completions: 'id, taskId, planId, characterId, periodKey',
+      attributeDefinitions: 'id, characterId, sortOrder'
+    }).upgrade(async tx => {
+      // v5 升級：為現有的計劃添加 imageUrl 欄位（預設為空）
+      // Dexie 會自動處理新欄位的添加，無需特殊遷移邏輯
     })
   }
   

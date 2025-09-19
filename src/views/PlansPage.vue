@@ -36,6 +36,16 @@
             </ion-label>
           </ion-item>
           <ion-item v-for="plan in filteredPlans" :key="plan.id">
+            <!-- 計劃圖片 -->
+            <ion-thumbnail slot="start" v-if="plan.imageUrl">
+              <img :src="plan.imageUrl" :alt="plan.name" @error="onImageError" />
+            </ion-thumbnail>
+            <ion-thumbnail slot="start" v-else class="placeholder-thumbnail">
+              <div class="placeholder-content">
+                <ion-icon :icon="imageOutline"></ion-icon>
+              </div>
+            </ion-thumbnail>
+            
             <ion-label @click="goToPlan(plan.id)" style="cursor: pointer; flex: 1;">
               <div class="plan-item">
                 <span class="plan-name">{{ plan.name }}</span>
@@ -63,24 +73,56 @@
         </ion-list>
       </div>
 
-      <!-- 編輯計劃名稱的 Modal -->
+      <!-- 編輯計劃的 Modal -->
       <ion-modal :is-open="editModalOpen" @did-dismiss="closeEditModal">
         <ion-header>
           <ion-toolbar>
-            <ion-title>編輯計劃名稱</ion-title>
+            <ion-title>編輯計劃</ion-title>
             <ion-buttons slot="end">
               <ion-button @click="closeEditModal">取消</ion-button>
             </ion-buttons>
           </ion-toolbar>
         </ion-header>
-        <ion-content>
+        <ion-content class="ion-padding">
+          <!-- 計劃名稱 -->
           <ion-item>
             <ion-input
               v-model="editingPlanName"
+              label="計劃名稱"
+              label-placement="floating"
               placeholder="請輸入計劃名稱"
               @keyup.enter="savePlanName"
             ></ion-input>
           </ion-item>
+          
+          <!-- 計劃圖片 -->
+          <div class="image-section">
+            <h3>計劃圖片</h3>
+            
+            <!-- 圖片預覽 -->
+            <div class="image-preview" v-if="editingPlanImage">
+              <img :src="editingPlanImage" :alt="editingPlanName" />
+              <ion-button fill="clear" color="danger" @click="removeImage">
+                <ion-icon :icon="trashOutline"></ion-icon>
+              </ion-button>
+            </div>
+            
+            <!-- 上傳區域 -->
+            <div class="upload-area" v-else @click="triggerFileInput">
+              <ion-icon :icon="imageOutline" size="large"></ion-icon>
+              <p>點擊上傳圖片</p>
+            </div>
+            
+            <!-- 隱藏的檔案輸入 -->
+            <input 
+              ref="fileInputRef" 
+              type="file" 
+              accept="image/*" 
+              style="display: none" 
+              @change="onFileSelected"
+            />
+          </div>
+          
           <ion-button expand="block" @click="savePlanName" :disabled="!editingPlanName">
             保存
           </ion-button>
@@ -109,12 +151,13 @@ import {
   IonNote,
   IonModal,
   IonInput,
-  IonIcon
+  IonIcon,
+  IonThumbnail
 } from '@ionic/vue'
 import { db, type Plan } from '@/db'
 import { nanoid } from 'nanoid'
 import { useGameStore } from '@/stores/useGameStore'
-import { createOutline, trashOutline } from 'ionicons/icons'
+import { createOutline, trashOutline, imageOutline } from 'ionicons/icons'
 import { useRouter } from 'vue-router'
 
 type TabType = 'daily' | 'weekly' | 'monthly'
@@ -128,6 +171,8 @@ const activeTab = ref<TabType>('daily')
 const editModalOpen = ref(false)
 const editingPlan = ref<Plan | null>(null)
 const editingPlanName = ref('')
+const editingPlanImage = ref('')
+const fileInputRef = ref<HTMLInputElement>()
 
 // 計算過濾後的計畫列表
 const filteredPlans = computed(() => {
@@ -219,6 +264,7 @@ async function removePlan(id: string) {
 function editPlanName(plan: Plan) {
   editingPlan.value = plan
   editingPlanName.value = plan.name
+  editingPlanImage.value = plan.imageUrl || ''
   editModalOpen.value = true
 }
 
@@ -226,23 +272,74 @@ function closeEditModal() {
   editModalOpen.value = false
   editingPlan.value = null
   editingPlanName.value = ''
+  editingPlanImage.value = ''
+}
+
+// 圖片處理方法
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function onFileSelected(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    // 檢查檔案大小（限制 5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      alert('圖片檔案大小不能超過 5MB')
+      return
+    }
+    
+    // 檢查檔案類型
+    if (!file.type.startsWith('image/')) {
+      alert('請選擇圖片檔案')
+      return
+    }
+    
+    // 轉換為 base64 或 URL
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      editingPlanImage.value = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+function removeImage() {
+  editingPlanImage.value = ''
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
 }
 
 async function savePlanName() {
   if (!editingPlan.value || !editingPlanName.value.trim()) return
   
   try {
-    await store.updatePlanName(editingPlan.value.id, editingPlanName.value.trim())
+    // 使用新的 updatePlan 方法來同時更新名稱和圖片
+    await store.updatePlan(editingPlan.value.id, {
+      name: editingPlanName.value.trim(),
+      imageUrl: editingPlanImage.value
+    })
     await load()
     closeEditModal()
   } catch (error) {
-    console.error('保存計劃名稱失敗:', error)
-    alert('保存計劃名稱時發生錯誤')
+    console.error('保存計劃失敗:', error)
+    alert('保存計劃時發生錯誤')
   }
 }
 
 function goToPlan(planId: string) {
   router.push(`/tabs/plan/${planId}`)
+}
+
+// 處理圖片載入失敗
+function onImageError(event: Event) {
+  const img = event.target as HTMLImageElement
+  // 當圖片載入失敗時，可以設定一個預設圖片或隱藏圖片
+  img.style.display = 'none'
+  // 或者設定為預設圖片
+  // img.src = '/default-plan-image.png'
 }
 
 onMounted(load)
@@ -259,6 +356,100 @@ watch(() => store.currentCharId, load)
 
 .plan-name {
   flex: 1;
+}
+
+/* 計劃圖片樣式 */
+.placeholder-thumbnail {
+  --size: 56px;
+  --border-radius: 8px;
+}
+
+.placeholder-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ion-color-light);
+  border-radius: 8px;
+}
+
+.placeholder-content ion-icon {
+  font-size: 24px;
+  color: var(--ion-color-medium);
+}
+
+ion-thumbnail img {
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+/* 圖片編輯區域樣式 */
+.image-section {
+  margin: 16px 0;
+}
+
+.image-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ion-color-dark);
+}
+
+.image-preview {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-preview ion-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  --padding: 4px;
+  --border-radius: 50%;
+  width: 32px;
+  height: 32px;
+}
+
+.upload-area {
+  width: 120px;
+  height: 120px;
+  border: 2px dashed var(--ion-color-medium);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: var(--ion-color-light-tint);
+}
+
+.upload-area:hover {
+  border-color: var(--ion-color-primary);
+  background-color: var(--ion-color-primary-tint);
+}
+
+.upload-area ion-icon {
+  color: var(--ion-color-medium);
+  margin-bottom: 8px;
+}
+
+.upload-area p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ion-color-medium);
+  text-align: center;
 }
 </style>
 

@@ -489,6 +489,26 @@ export const useGameStore = defineStore('game', {
       await db.plans.put(plan)
     },
 
+    async updatePlan(planId: string, updates: { name?: string; imageUrl?: string }) {
+      if (!this.currentCharId) throw new Error('CHARACTER_NOT_SELECTED')
+      const plan = await db.plans.get(planId)
+      if (!plan) throw new Error('PLAN_NOT_FOUND')
+      if (plan.characterId !== this.currentCharId) throw new Error('PLAN_MISMATCH')
+      
+      if (updates.name !== undefined) {
+        const trimmedName = updates.name.trim()
+        if (!trimmedName) throw new Error('NAME_EMPTY')
+        plan.name = trimmedName
+      }
+      
+      if (updates.imageUrl !== undefined) {
+        plan.imageUrl = updates.imageUrl || undefined
+      }
+      
+      plan.updatedAt = Date.now()
+      await db.plans.put(plan)
+    },
+
     async updateTask(taskId: string, updates: { name?: string; reward?: Reward }) {
       const task = await db.tasks.get(taskId)
       if (!task) throw new Error('TASK_NOT_FOUND')
